@@ -1,0 +1,30 @@
+{
+	"name": "obsidian-per-folder-sort",
+	"version": "1.0.0",
+	"description": "Set a file explorer sort for one folder. Folders you leave alone keep the vault sort.",
+	"main": "main.js",
+	"type": "module",
+	"scripts": {
+		"dev": "node esbuild.config.mjs",
+		"build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
+		"test": "node --experimental-strip-types --test src/folder-rules.test.ts"
+	},
+	"keywords": [
+		"obsidian",
+		"plugin",
+		"file-explorer",
+		"sort"
+	],
+	"license": "MIT",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/himanshugupta2077/obsidian-per-folder-sort.git"
+	},
+	"devDependencies": {
+		"@types/node": "^16.11.6",
+		"esbuild": "0.25.5",
+		"obsidian": "latest",
+		"tslib": "2.4.0",
+		"typescript": "^5.8.3"
+	}
+}

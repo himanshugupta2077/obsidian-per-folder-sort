@@ -1,0 +1,10 @@
+{
+	"id": "per-folder-sort",
+	"name": "Per-folder sort",
+	"version": "1.0.0",
+	"minAppVersion": "1.7.2",
+	"description": "Set a file explorer sort for one folder. Folders you leave alone keep the vault sort.",
+	"author": "Himanshu Gupta",
+	"authorUrl": "https://github.com/himanshugupta2077",
+	"isDesktopOnly": false
+}
