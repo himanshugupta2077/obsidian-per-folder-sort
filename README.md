@@ -25,6 +25,10 @@ The plugin settings list every override, and each one can be cleared from there.
 
 Renaming or moving a folder keeps its override. Deleting a folder drops it.
 
+## Pin items to the top
+
+Right-click a file or folder and choose **Pin to top of folder**. Pinned items sit above everything else in their folder, in the order you pinned them; the rest keep the folder's sort. Choose **Unpin from top** to put one back. Use it for an order no sort gives you, such as numbered sections without the numbers in their names. Pins follow renames and are dropped when the item moves to another folder or is deleted.
+
 ## Install
 
 Copy `main.js` and `manifest.json` into:

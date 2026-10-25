@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+	applyPins,
 	isSortOrder,
+	removePins,
+	renamePins,
 	removeFolderSorts,
 	renameFolderSorts,
 	sanitizeFolderSorts,
@@ -128,5 +131,49 @@ describe("removeFolderSorts", () => {
 		assert.deepEqual(next, {
 			"Notes-extra": "byCreatedTimeReverse",
 		});
+	});
+});
+
+describe("pins", () => {
+	const name = (s: string) => s;
+
+	it("puts pinned items first in pin order and keeps the rest in sorted order", () => {
+		const items = ["Daily", "Detection", "Governance", "Infrastructure", "Me", "Product"];
+		assert.deepEqual(applyPins(items, name, ["Governance", "Product", "Infrastructure", "Detection"]), [
+			"Governance",
+			"Product",
+			"Infrastructure",
+			"Detection",
+			"Daily",
+			"Me",
+		]);
+		assert.equal(applyPins(items, name, undefined), items);
+		assert.deepEqual(applyPins(items, name, ["Missing"]), items);
+	});
+
+	it("sanitizes stored pins", () => {
+		const data = sanitizeFolderSorts({ pinned: { A: ["x", "x", 3, ""], B: [], "": ["y"], C: "z" } });
+		assert.deepEqual(data.pinned, { A: ["x"] });
+		assert.deepEqual(sanitizeFolderSorts(null).pinned, {});
+	});
+
+	it("follows renames and moves", () => {
+		const pins = { "Work/PL": ["Gov", "Prod"], "Work/PL/Gov": ["SOC 2"] };
+		assert.deepEqual(renamePins(pins, "Work/PL/Gov", "Work/PL/Governance"), {
+			"Work/PL": ["Governance", "Prod"],
+			"Work/PL/Governance": ["SOC 2"],
+		});
+		assert.deepEqual(renamePins(pins, "Work/PL/Prod", "Elsewhere/Prod"), {
+			"Work/PL": ["Gov"],
+			"Work/PL/Gov": ["SOC 2"],
+		});
+		assert.deepEqual(renamePins(pins, "Work", "Job"), { "Job/PL": ["Gov", "Prod"], "Job/PL/Gov": ["SOC 2"] });
+		assert.equal(renamePins(pins, "Other", "Else"), pins);
+	});
+
+	it("drops pins on delete", () => {
+		const pins = { "Work/PL": ["Gov", "Prod"], "Work/PL/Gov": ["SOC 2"] };
+		assert.deepEqual(removePins(pins, "Work/PL/Gov"), { "Work/PL": ["Prod"] });
+		assert.equal(removePins(pins, "Other"), pins);
 	});
 });

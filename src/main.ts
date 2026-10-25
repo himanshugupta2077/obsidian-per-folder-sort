@@ -10,9 +10,12 @@ import {
 } from "obsidian";
 import {
 	SORT_ORDERS,
+	applyPins,
 	isSortOrder,
 	removeFolderSorts,
+	removePins,
 	renameFolderSorts,
+	renamePins,
 	sanitizeFolderSorts,
 	sortLabel,
 	usesModifiedTime,
@@ -37,6 +40,10 @@ interface FileExplorerView {
 	sort?: () => void;
 }
 
+interface ExplorerItem {
+	file?: TAbstractFile;
+}
+
 interface ExplorerPrototype {
 	getSortedFolderItems: (this: FileExplorerView, folder: TFolder) => unknown;
 }
@@ -47,7 +54,7 @@ interface InstalledPatch {
 }
 
 export default class PerFolderSortPlugin extends Plugin {
-	data: FolderSortData = { folders: {} };
+	data: FolderSortData = { folders: {}, pinned: {} };
 	private patches = new Map<object, InstalledPatch>();
 	private warned = false;
 
@@ -57,6 +64,7 @@ export default class PerFolderSortPlugin extends Plugin {
 		this.registerEvent(
 			this.app.workspace.on("file-menu", (menu, file, source) => {
 				this.addSortMenu(menu, file, source);
+				this.addPinMenu(menu, file, source);
 			})
 		);
 		this.registerEvent(
@@ -155,6 +163,32 @@ export default class PerFolderSortPlugin extends Plugin {
 		});
 	}
 
+	private addPinMenu(menu: Menu, file: TAbstractFile, source: string): void {
+		const parent = file.parent;
+		if (source !== MENU_SOURCE || !parent) return;
+		const pins = this.data.pinned[parent.path] ?? [];
+		const pinned = pins.includes(file.name);
+		menu.addItem((item) => {
+			item
+				.setTitle(pinned ? "Unpin from top" : "Pin to top of folder")
+				.setIcon(pinned ? "pin-off" : "pin")
+				.setSection("action")
+				.onClick(() => {
+					this.setPinned(parent.path, file.name, !pinned);
+				});
+		});
+	}
+
+	/** Pinning adds to the end of the folder's pins, so items pinned in turn keep that order. */
+	setPinned(folderPath: string, name: string, pinned: boolean): void {
+		const pins = (this.data.pinned[folderPath] ?? []).filter((n) => n !== name);
+		if (pinned) pins.push(name);
+		if (pins.length > 0) this.data.pinned[folderPath] = pins;
+		else delete this.data.pinned[folderPath];
+		void this.saveData(this.data);
+		this.resort();
+	}
+
 	private addOrderItem(
 		item: MenuItem,
 		folder: TFolder,
@@ -170,6 +204,11 @@ export default class PerFolderSortPlugin extends Plugin {
 	}
 
 	private onRename(file: TAbstractFile, oldPath: string): void {
+		const pins = renamePins(this.data.pinned, oldPath, file.path);
+		if (pins !== this.data.pinned) {
+			this.data.pinned = pins;
+			void this.saveData(this.data);
+		}
 		if (!(file instanceof TFolder)) return;
 		const next = renameFolderSorts(this.data.folders, oldPath, file.path);
 		if (next === this.data.folders) return;
@@ -178,6 +217,11 @@ export default class PerFolderSortPlugin extends Plugin {
 	}
 
 	private onDelete(file: TAbstractFile): void {
+		const pins = removePins(this.data.pinned, file.path);
+		if (pins !== this.data.pinned) {
+			this.data.pinned = pins;
+			void this.saveData(this.data);
+		}
 		if (!(file instanceof TFolder)) return;
 		const next = removeFolderSorts(this.data.folders, file.path);
 		if (next === this.data.folders) return;
@@ -234,7 +278,7 @@ export default class PerFolderSortPlugin extends Plugin {
 			folder: TFolder
 		) {
 			const override = folder ? plugin.data.folders[folder.path] : undefined;
-			return withSortOrder(
+			const items = withSortOrder(
 				this.sortOrder,
 				isSortOrder(override) ? override : undefined,
 				(order) => {
@@ -242,6 +286,10 @@ export default class PerFolderSortPlugin extends Plugin {
 				},
 				() => original.call(this, folder)
 			);
+			const pins = folder ? plugin.data.pinned[folder.path] : undefined;
+			return Array.isArray(items)
+				? applyPins(items as ExplorerItem[], (item) => item.file?.name ?? "", pins)
+				: items;
 		};
 		proto.getSortedFolderItems = wrapped;
 		const patch = { original, wrapped };
@@ -271,6 +319,23 @@ class PerFolderSortSettingTab extends PluginSettingTab {
 		super(app, plugin);
 	}
 
+	private displayPins(containerEl: HTMLElement): void {
+		containerEl.createEl("p", {
+			text: "Right-click a file or folder and choose Pin to top of folder to keep it above everything else in its folder. Items pinned in turn keep that order.",
+		});
+		for (const [path, names] of Object.entries(this.plugin.data.pinned)) {
+			new Setting(containerEl)
+				.setName(`Pinned in ${path === "/" ? "Vault root" : path}`)
+				.setDesc(names.join(" → "))
+				.addButton((button) => {
+					button.setButtonText("Unpin all").onClick(() => {
+						for (const name of names) this.plugin.setPinned(path, name, false);
+						this.display();
+					});
+				});
+		}
+	}
+
 	display(): void {
 		const { containerEl } = this;
 		containerEl.empty();
@@ -280,6 +345,8 @@ class PerFolderSortSettingTab extends PluginSettingTab {
 		containerEl.createEl("p", {
 			text: "Notes use the order you pick. Subfolders stay above the notes and stay in name order. That is the same rule the vault sort already uses.",
 		});
+
+		this.displayPins(containerEl);
 
 		const entries = Object.entries(this.plugin.data.folders).sort(([a], [b]) =>
 			a.localeCompare(b)
